@@ -4,4 +4,5 @@ transformers
 line-bot-sdk
 firebase-admin
 tiktoken
+sentencepiece
 gunicorn
