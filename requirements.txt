@@ -3,4 +3,5 @@ torch
 transformers
 line-bot-sdk
 firebase-admin
+tiktoken
 gunicorn
