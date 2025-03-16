@@ -19,7 +19,7 @@ db = firestore.client()
 
 # 🔹 โหลดโมเดล WangchanBERTa
 MODEL_NAME = "airesearch/wangchanberta-base-att-spm-uncased"
-tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME, use_fast=False)
+tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
 model = AutoModelForSequenceClassification.from_pretrained(MODEL_NAME, num_labels=5)
 
 # 🔹 สร้าง Flask App
