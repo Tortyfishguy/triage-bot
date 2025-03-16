@@ -36,18 +36,27 @@ def classify_esi(text):
     predicted_esi = torch.argmax(outputs.logits, dim=1).item() + 1
     return predicted_esi
 
-# 🔹 Route สำหรับรับ Webhook จาก LINE
+# 📌 Route สำหรับรับ Webhook จาก LINE
 @app.route("/webhook", methods=["POST"])
 def webhook():
+    # ✅ ตรวจสอบค่า Signature จาก Header
     signature = request.headers.get("X-Line-Signature", "No Signature")
+    
+    # ✅ ดึงข้อมูลจาก Request Body
     body = request.get_data(as_text=True)
-    print(f"Received Webhook: {body}")  # Debug Log
-    print(f"Signature: {signature}")
+
+    # 🔍 Debug Log เพิ่มรายละเอียดมากขึ้น
+    print("=" * 50)
+    print("[📩] Received Webhook Request")
+    print(f"🔹 Headers: {dict(request.headers)}")  # ดู Headers ทั้งหมด
+    print(f"🔹 Signature: {signature}")
+    print(f"🔹 Body: {body}")
+    print("=" * 50)
 
     try:
         handler.handle(body, signature)
     except Exception as e:
-        print(f"Error: {str(e)}")  # Debug Error
+        print(f"[❌] Error: {str(e)}")  # Debug Error
         return str(e), 400
 
     return "OK"
