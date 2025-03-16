@@ -1,0 +1,3 @@
+__pycache__/
+venv/
+firebase_credentials.json  # ห้ามอัปโหลดไฟล์นี้
