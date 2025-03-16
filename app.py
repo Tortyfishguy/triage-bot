@@ -11,6 +11,7 @@ from transformers import AutoTokenizer, AutoModelForSequenceClassification
 LINE_ACCESS_TOKEN = os.getenv("LINE_ACCESS_TOKEN")
 LINE_CHANNEL_SECRET = os.getenv("LINE_CHANNEL_SECRET")
 FIREBASE_CREDENTIALS_JSON = os.getenv("FIREBASE_CREDENTIALS_JSON")
+print("FIREBASE_CREDENTIALS_JSON:", FIREBASE_CREDENTIALS_JSON[:100]) # Debug
 
 # 🔹 โหลด Firebase Credentials จาก Environment Variables
 cred = credentials.Certificate(json.loads(FIREBASE_CREDENTIALS_JSON))
