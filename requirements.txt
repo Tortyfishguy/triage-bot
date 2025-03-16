@@ -1,0 +1,6 @@
+flask
+torch
+transformers
+line-bot-sdk
+firebase-admin
+gunicorn
