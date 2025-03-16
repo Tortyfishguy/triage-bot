@@ -39,14 +39,17 @@ def classify_esi(text):
 # 🔹 Route สำหรับรับ Webhook จาก LINE
 @app.route("/webhook", methods=["POST"])
 def webhook():
-    signature = request.headers["X-Line-Signature"]
+    signature = request.headers.get("X-Line-Signature", "No Signature")
     body = request.get_data(as_text=True)
-    
+    print(f"Received Webhook: {body}")  # Debug Log
+    print(f"Signature: {signature}")
+
     try:
         handler.handle(body, signature)
     except Exception as e:
+        print(f"Error: {str(e)}")  # Debug Error
         return str(e), 400
-    
+
     return "OK"
 
 # 🔹 จัดการข้อความจาก LINE
