@@ -6,7 +6,7 @@ import requests
 import zipfile
 
 from flask import Flask, request, jsonify
-from firebase_admin import credentials, initialize_app, storage
+from firebase_admin import credentials, initialize_app
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 from linebot import LineBotApi, WebhookHandler
 from linebot.models import MessageEvent, TextMessage, TextSendMessage
@@ -14,12 +14,20 @@ from linebot.models import MessageEvent, TextMessage, TextSendMessage
 # ✅ โหลด Environment Variables
 LINE_ACCESS_TOKEN = os.getenv("LINE_ACCESS_TOKEN")
 LINE_CHANNEL_SECRET = os.getenv("LINE_CHANNEL_SECRET")
-GOOGLE_APPLICATION_CREDENTIALS = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+FIREBASE_JSON_URL = os.getenv("FIREBASE_JSON_URL")  # ลิงก์ไฟล์ JSON ของ Firebase Credentials
 MODEL_ZIP_URL = os.getenv("MODEL_ZIP_URL")  # ลิงก์ไฟล์ .zip ของโมเดลจาก Firebase Storage
 
-# ✅ ตั้งค่าการใช้ Firebase
-cred = credentials.Certificate(GOOGLE_APPLICATION_CREDENTIALS)
-firebase_app = initialize_app(cred, {"storageBucket": "esi-triage-bot-ab4ac.appspot.com"})
+# ✅ ดาวน์โหลด service-account.json ถ้ายังไม่มี
+JSON_PATH = "service-account.json"
+if not os.path.exists(JSON_PATH):
+    print("📥 Downloading service-account.json from Firebase Storage...")
+    response = requests.get(FIREBASE_JSON_URL)
+    with open(JSON_PATH, "wb") as f:
+        f.write(response.content)
+    print("✅ service-account.json is ready!")
+
+# ✅ ตั้งค่า Environment Variable ให้ Firebase ใช้ไฟล์ที่ดาวน์โหลด
+os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = JSON_PATH
 
 # ✅ ตั้งค่าการใช้ CPU เท่านั้น
 device = "cpu"
