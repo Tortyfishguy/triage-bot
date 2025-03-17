@@ -3,6 +3,7 @@ torch
 transformers
 line-bot-sdk
 firebase-admin
+google-cloud-storage
 tiktoken
 sentencepiece
 uvicorn
