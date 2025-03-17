@@ -3,9 +3,9 @@ import os
 import json
 import torch
 import threading
-import requests
-import firebase_admin
-from firebase_admin import credentials, firestore, storage
+import zipfile
+from firebase_admin import credentials, firestore, initialize_app
+from google.cloud import storage  # ✅ Firebase Storage
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 from linebot import LineBotApi, WebhookHandler
 from linebot.models import MessageEvent, TextMessage, TextSendMessage
@@ -18,40 +18,47 @@ FIREBASE_BUCKET_NAME = os.getenv("FIREBASE_BUCKET_NAME")
 
 # ✅ โหลด Firebase Credentials
 cred = credentials.Certificate(json.loads(FIREBASE_CREDENTIALS_JSON))
-firebase_admin.initialize_app(cred, {"storageBucket": FIREBASE_BUCKET_NAME})
+firebase_app = initialize_app(cred)
 db = firestore.client()
-bucket = storage.bucket()
 
-# ✅ ดาวน์โหลดโมเดลจาก Firebase Storage
-MODEL_DIR = "./esi_model"
-MODEL_PATH = f"{MODEL_DIR}/pytorch_model_fp16.bin"
-TOKENIZER_PATH = f"{MODEL_DIR}/tokenizer.json"
-CONFIG_PATH = f"{MODEL_DIR}/config.json"
+# ✅ ตั้งค่า Firebase Storage
+storage_client = storage.Client()
+bucket = storage_client.bucket(FIREBASE_BUCKET_NAME)
 
-def download_model():
-    os.makedirs(MODEL_DIR, exist_ok=True)
-    
-    for file_name in ["pytorch_model_fp16.bin", "tokenizer.json", "config.json"]:
-        blob = bucket.blob(f"esi_model/{file_name}")
-        destination_path = f"{MODEL_DIR}/{file_name}"
-        
-        print(f"⬇️ Downloading {file_name} from Firebase Storage...")
-        blob.download_to_filename(destination_path)
-        print(f"✅ {file_name} downloaded!")
+# ✅ ฟังก์ชันโหลดโมเดลจาก Firebase Storage
+def download_and_extract_model():
+    model_zip_path = "esi_model.zip"
+    extract_to = "./esi_model"
 
-# ✅ โหลดโมเดล
-print("🚀 Downloading Model...")
-download_model()
+    # ✅ ดาวน์โหลดไฟล์จาก Firebase Storage
+    blob = bucket.blob(model_zip_path)
+    blob.download_to_filename(model_zip_path)
+    print(f"📥 ดาวน์โหลด {model_zip_path} สำเร็จ")
+
+    # ✅ แตกไฟล์ ZIP
+    with zipfile.ZipFile(model_zip_path, "r") as zip_ref:
+        zip_ref.extractall(extract_to)
+    print(f"📂 แตกไฟล์ {model_zip_path} ไปที่ {extract_to} สำเร็จ")
+
+    # ✅ ลบไฟล์ ZIP หลังแตกไฟล์เสร็จ
+    os.remove(model_zip_path)
+    print("🗑 ลบไฟล์ ZIP สำเร็จ")
+
+# ✅ ดาวน์โหลดและแตกไฟล์โมเดลก่อนเริ่มแอป
+download_and_extract_model()
+
+# ✅ ตั้งค่าการใช้ GPU หรือ CPU
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
-print("🔄 Loading Model...")
-tokenizer = AutoTokenizer.from_pretrained(MODEL_DIR)
+# ✅ โหลดโมเดลจากโฟลเดอร์ที่ดาวน์โหลดมา
+MODEL_PATH = "./esi_model"
+
+tokenizer = AutoTokenizer.from_pretrained(MODEL_PATH)
 model = AutoModelForSequenceClassification.from_pretrained(
-    MODEL_DIR,
+    MODEL_PATH, 
     num_labels=5,
-    torch_dtype=torch.float16 if device == "cuda" else torch.float32
+    torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32  # ใช้ Half-Precision บน GPU
 ).to(device)
-print("✅ Model Loaded!")
 
 # ✅ ฟังก์ชันเคลียร์ CUDA Memory
 def clear_cuda_memory():
@@ -74,8 +81,9 @@ def classify_esi(text):
     
     predicted_esi = torch.argmax(outputs.logits, dim=1).item() + 1
 
-    # เคลียร์ CUDA Memory หลังคำนวณเสร็จ
+    # ✅ เคลียร์ CUDA Memory หลังคำนวณเสร็จ
     clear_cuda_memory()
+
     return predicted_esi
 
 # ✅ Webhook ตอบกลับทันที + ใช้ Threading
@@ -91,7 +99,7 @@ def webhook():
         print("❌ Missing X-Line-Signature")
         return "Missing Signature", 400
 
-    # ใช้ Thread เพื่อให้ Webhook ตอบกลับทันที
+    # ✅ ใช้ Thread เพื่อให้ Webhook ตอบกลับทันที
     def handle_message_async():
         try:
             handler.handle(body, signature)
@@ -99,6 +107,7 @@ def webhook():
             print(f"⚠️ Error: {str(e)}")
 
     threading.Thread(target=handle_message_async).start()
+    
     return "OK", 200  # ตอบกลับทันทีเพื่อป้องกัน timeout
 
 # ✅ ตอบกลับจาก LINE
@@ -107,7 +116,7 @@ def handle_message(event):
     text = event.message.text
     esi_level = classify_esi(text)  # ใช้ฟังก์ชันประเมินระดับ ESI
 
-    # แปลงระดับ ESI เป็นข้อความที่เข้าใจง่าย
+    # ✅ แปลงระดับ ESI เป็นข้อความที่เข้าใจง่าย
     if esi_level in [1, 2]:
         response_text = f"🚨 อาการของคุณจำเป็นต้องเข้ารับการรักษาที่ห้องฉุกเฉินทันที! (ESI {esi_level})"
     elif esi_level == 3:
