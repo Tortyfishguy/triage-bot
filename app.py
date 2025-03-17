@@ -2,6 +2,7 @@ from flask import Flask, request, jsonify
 import os
 import json
 import torch
+import threading
 from firebase_admin import credentials, firestore, initialize_app
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 from linebot import LineBotApi, WebhookHandler
@@ -35,7 +36,7 @@ def classify_esi(text):
     predicted_esi = torch.argmax(outputs.logits, dim=1).item() + 1
     return predicted_esi
 
-# Webhook จาก LINE
+# ✅ Webhook ตอบกลับทันที + ใช้ Threading
 @app.route("/webhook", methods=["POST"])
 def webhook():
     signature = request.headers.get("X-Line-Signature", "No Signature")
@@ -48,15 +49,14 @@ def webhook():
         print("❌ Missing X-Line-Signature")
         return "Missing Signature", 400
 
-    try:
-        handler.handle(body, signature)
-    except Exception as e:
-        print(f"⚠️ Error: {str(e)}")
-        return str(e), 400
+    # ✅ ใช้ Threading เพื่อประมวลผล Webhook ใน Background
+    thread = threading.Thread(target=handler.handle, args=(body, signature))
+    thread.start()
 
+    # ✅ ตอบกลับ "OK" ทันที ป้องกัน Timeout
     return "OK"
 
-# ตอบกลับจาก LINE
+# ✅ ตอบกลับจาก LINE
 @handler.add(MessageEvent, message=TextMessage)
 def handle_message(event):
     text = event.message.text
@@ -70,10 +70,13 @@ def handle_message(event):
     else:
         response_text = f"💊 แนะนำให้เข้ารับการตรวจที่โรงพยาบาลในวันถัดไป (ESI {esi_level})"
 
-    # ตอบกลับข้อความโดยใช้ reply_token ใหม่จาก event
-    line_bot_api.reply_message(event.reply_token, TextSendMessage(text=response_text))
+    # ✅ ใช้ Threading เพื่อให้ LINE ตอบกลับเร็วขึ้น
+    def reply():
+        line_bot_api.reply_message(event.reply_token, TextSendMessage(text=response_text))
 
-# รันแอป
+    thread = threading.Thread(target=reply)
+    thread.start()
+
+# ✅ รันแอป
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=10000)
-    
