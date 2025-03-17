@@ -49,12 +49,16 @@ def webhook():
         print("❌ Missing X-Line-Signature")
         return "Missing Signature", 400
 
-    # ✅ ใช้ Threading เพื่อประมวลผล Webhook ใน Background
-    thread = threading.Thread(target=handler.handle, args=(body, signature))
-    thread.start()
+    # ใช้ Thread เพื่อให้ Webhook ตอบกลับทันที
+    def handle_message_async():
+        try:
+            handler.handle(body, signature)
+        except Exception as e:
+            print(f"⚠️ Error: {str(e)}")
 
-    # ✅ ตอบกลับ "OK" ทันที ป้องกัน Timeout
-    return "OK"
+    threading.Thread(target=handle_message_async).start()
+    
+    return "OK", 200  # ตอบกลับทันทีเพื่อป้องกัน timeout
 
 # ✅ ตอบกลับจาก LINE
 @handler.add(MessageEvent, message=TextMessage)
