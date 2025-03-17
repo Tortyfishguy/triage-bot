@@ -3,31 +3,55 @@ import os
 import json
 import torch
 import threading
-from firebase_admin import credentials, firestore, initialize_app
+import requests
+import firebase_admin
+from firebase_admin import credentials, firestore, storage
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 from linebot import LineBotApi, WebhookHandler
 from linebot.models import MessageEvent, TextMessage, TextSendMessage
 
-# โหลด Environment Variables
+# ✅ โหลด Environment Variables
 LINE_ACCESS_TOKEN = os.getenv("LINE_ACCESS_TOKEN")
 LINE_CHANNEL_SECRET = os.getenv("LINE_CHANNEL_SECRET")
 FIREBASE_CREDENTIALS_JSON = os.getenv("FIREBASE_CREDENTIALS_JSON")
+FIREBASE_BUCKET_NAME = os.getenv("FIREBASE_BUCKET_NAME")
 
-# โหลด Firebase Credentials
+# ✅ โหลด Firebase Credentials
 cred = credentials.Certificate(json.loads(FIREBASE_CREDENTIALS_JSON))
-firebase_app = initialize_app(cred)
+firebase_admin.initialize_app(cred, {"storageBucket": FIREBASE_BUCKET_NAME})
 db = firestore.client()
+bucket = storage.bucket()
 
-# ✅ โหลด WangchanBERTA Model (ลดขนาดเป็น float16 และใช้ GPU ถ้ามี)
-MODEL_NAME = "airesearch/wangchanberta-base-att-spm-uncased"
+# ✅ ดาวน์โหลดโมเดลจาก Firebase Storage
+MODEL_DIR = "./esi_model"
+MODEL_PATH = f"{MODEL_DIR}/pytorch_model_fp16.bin"
+TOKENIZER_PATH = f"{MODEL_DIR}/tokenizer.json"
+CONFIG_PATH = f"{MODEL_DIR}/config.json"
+
+def download_model():
+    os.makedirs(MODEL_DIR, exist_ok=True)
+    
+    for file_name in ["pytorch_model_fp16.bin", "tokenizer.json", "config.json"]:
+        blob = bucket.blob(f"esi_model/{file_name}")
+        destination_path = f"{MODEL_DIR}/{file_name}"
+        
+        print(f"⬇️ Downloading {file_name} from Firebase Storage...")
+        blob.download_to_filename(destination_path)
+        print(f"✅ {file_name} downloaded!")
+
+# ✅ โหลดโมเดล
+print("🚀 Downloading Model...")
+download_model()
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
-tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
+print("🔄 Loading Model...")
+tokenizer = AutoTokenizer.from_pretrained(MODEL_DIR)
 model = AutoModelForSequenceClassification.from_pretrained(
-    MODEL_NAME, 
-    num_labels=5, 
-    torch_dtype=torch.float16 if device == "cuda" else torch.float32  # ใช้ Half-Precision บน GPU
+    MODEL_DIR,
+    num_labels=5,
+    torch_dtype=torch.float16 if device == "cuda" else torch.float32
 ).to(device)
+print("✅ Model Loaded!")
 
 # ✅ ฟังก์ชันเคลียร์ CUDA Memory
 def clear_cuda_memory():
@@ -36,7 +60,7 @@ def clear_cuda_memory():
         torch.cuda.ipc_collect()
         print("🧹 Cleared Unused CUDA Memory")
 
-# สร้าง Flask App
+# ✅ สร้าง Flask App
 app = Flask(__name__)
 line_bot_api = LineBotApi(LINE_ACCESS_TOKEN)
 handler = WebhookHandler(LINE_CHANNEL_SECRET)
@@ -52,7 +76,6 @@ def classify_esi(text):
 
     # เคลียร์ CUDA Memory หลังคำนวณเสร็จ
     clear_cuda_memory()
-
     return predicted_esi
 
 # ✅ Webhook ตอบกลับทันที + ใช้ Threading
@@ -76,7 +99,6 @@ def webhook():
             print(f"⚠️ Error: {str(e)}")
 
     threading.Thread(target=handle_message_async).start()
-    
     return "OK", 200  # ตอบกลับทันทีเพื่อป้องกัน timeout
 
 # ✅ ตอบกลับจาก LINE
