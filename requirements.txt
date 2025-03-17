@@ -1,10 +1,7 @@
-flask
-torch
-transformers
-line-bot-sdk
+Flask
 firebase-admin
-google-cloud-storage
-tiktoken
-sentencepiece
-uvicorn
+torch==2.0.1+cpu  -f https://download.pytorch.org/whl/cpu.html
+transformers
+requests
+line-bot-sdk
 gunicorn
