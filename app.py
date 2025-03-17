@@ -18,14 +18,23 @@ cred = credentials.Certificate(json.loads(FIREBASE_CREDENTIALS_JSON))
 firebase_app = initialize_app(cred)
 db = firestore.client()
 
-# ✅ โหลด WangchanBERTA Model (ลดขนาดเป็น float16)
+# ✅ โหลด WangchanBERTA Model (ลดขนาดเป็น float16 และใช้ GPU ถ้ามี)
 MODEL_NAME = "airesearch/wangchanberta-base-att-spm-uncased"
+device = "cuda" if torch.cuda.is_available() else "cpu"
+
 tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
 model = AutoModelForSequenceClassification.from_pretrained(
     MODEL_NAME, 
     num_labels=5, 
-    torch_dtype=torch.float16  # ใช้ Half-Precision ลด RAM
-).to("cuda" if torch.cuda.is_available() else "cpu")  # ส่งโมเดลไปยัง GPU ถ้ามี
+    torch_dtype=torch.float16 if device == "cuda" else torch.float32  # ใช้ Half-Precision บน GPU
+).to(device)
+
+# ✅ ฟังก์ชันเคลียร์ CUDA Memory
+def clear_cuda_memory():
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+        torch.cuda.ipc_collect()
+        print("🧹 Cleared Unused CUDA Memory")
 
 # สร้าง Flask App
 app = Flask(__name__)
@@ -34,13 +43,16 @@ handler = WebhookHandler(LINE_CHANNEL_SECRET)
 
 # ✅ ฟังก์ชันประเมิน ESI
 def classify_esi(text):
-    device = "cuda" if torch.cuda.is_available() else "cpu"
     inputs = tokenizer(text, return_tensors="pt", truncation=True, padding=True, max_length=256).to(device)
 
     with torch.no_grad():
         outputs = model(**inputs)
     
     predicted_esi = torch.argmax(outputs.logits, dim=1).item() + 1
+
+    # เคลียร์ CUDA Memory หลังคำนวณเสร็จ
+    clear_cuda_memory()
+
     return predicted_esi
 
 # ✅ Webhook ตอบกลับทันที + ใช้ Threading
