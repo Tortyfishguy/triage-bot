@@ -5,4 +5,5 @@ line-bot-sdk
 firebase-admin
 tiktoken
 sentencepiece
+uvicorn
 gunicorn
