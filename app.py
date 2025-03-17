@@ -1,63 +1,69 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request
 import os
 import json
 import torch
 import threading
+import requests
 import zipfile
-from firebase_admin import credentials, firestore, initialize_app
-from google.cloud import storage  # ✅ Firebase Storage
+
+from firebase_admin import credentials, firestore, initialize_app, storage
+from google.cloud import storage as gcs_storage
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 from linebot import LineBotApi, WebhookHandler
 from linebot.models import MessageEvent, TextMessage, TextSendMessage
 
+# ✅ ตั้งค่า Firebase Storage URL (แก้ไขให้เป็นของโปรเจคคุณ)
+FIREBASE_JSON_URL = "https://firebasestorage.googleapis.com/v0/b/esi-triage-bot-ab4ac.firebasestorage.app/o/esi-triage-bot-ab4ac-firebase-adminsdk-fbsvc-4722ca62ea.json?alt=media"
+MODEL_ZIP_URL = "https://firebasestorage.googleapis.com/v0/b/esi-triage-bot-ab4ac.firebasestorage.app/o/esi_model_clean.zip?alt=media"
+
+# ✅ ตั้งค่าที่เก็บไฟล์บนเซิร์ฟเวอร์
+LOCAL_CREDENTIALS_PATH = "/tmp/firebase-adminsdk.json"
+LOCAL_MODEL_PATH = "/tmp/esi_model"
+
+# ✅ ดึงไฟล์ Firebase Credentials JSON จาก Firebase Storage
+def download_firebase_credentials():
+    if not os.path.exists(LOCAL_CREDENTIALS_PATH):
+        print("🔽 Downloading Firebase Credentials JSON...")
+        response = requests.get(FIREBASE_JSON_URL)
+        with open(LOCAL_CREDENTIALS_PATH, "wb") as file:
+            file.write(response.content)
+        os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = LOCAL_CREDENTIALS_PATH
+        print("✅ Firebase Credentials Downloaded")
+
+# ✅ ดึงไฟล์โมเดลจาก Firebase Storage
+def download_and_extract_model():
+    if not os.path.exists(LOCAL_MODEL_PATH):
+        print("🔽 Downloading Model ZIP...")
+        response = requests.get(MODEL_ZIP_URL)
+        zip_path = "/tmp/esi_model.zip"
+        with open(zip_path, "wb") as file:
+            file.write(response.content)
+        
+        print("📦 Extracting Model...")
+        with zipfile.ZipFile(zip_path, "r") as zip_ref:
+            zip_ref.extractall("/tmp/")
+        print("✅ Model Extracted")
+
 # ✅ โหลด Environment Variables
 LINE_ACCESS_TOKEN = os.getenv("LINE_ACCESS_TOKEN")
 LINE_CHANNEL_SECRET = os.getenv("LINE_CHANNEL_SECRET")
-FIREBASE_CREDENTIALS_JSON = os.getenv("FIREBASE_CREDENTIALS_JSON")
-FIREBASE_BUCKET_NAME = os.getenv("FIREBASE_BUCKET_NAME")
 
 # ✅ โหลด Firebase Credentials
-cred = credentials.Certificate(json.loads(FIREBASE_CREDENTIALS_JSON))
+download_firebase_credentials()
+cred = credentials.Certificate(LOCAL_CREDENTIALS_PATH)
 firebase_app = initialize_app(cred)
 db = firestore.client()
 
-# ✅ ตั้งค่า Firebase Storage
-storage_client = storage.Client()
-bucket = storage_client.bucket(FIREBASE_BUCKET_NAME)
-
-# ✅ ฟังก์ชันโหลดโมเดลจาก Firebase Storage
-def download_and_extract_model():
-    model_zip_path = "esi_model.zip"
-    extract_to = "./esi_model"
-
-    # ✅ ดาวน์โหลดไฟล์จาก Firebase Storage
-    blob = bucket.blob(model_zip_path)
-    blob.download_to_filename(model_zip_path)
-    print(f"📥 ดาวน์โหลด {model_zip_path} สำเร็จ")
-
-    # ✅ แตกไฟล์ ZIP
-    with zipfile.ZipFile(model_zip_path, "r") as zip_ref:
-        zip_ref.extractall(extract_to)
-    print(f"📂 แตกไฟล์ {model_zip_path} ไปที่ {extract_to} สำเร็จ")
-
-    # ✅ ลบไฟล์ ZIP หลังแตกไฟล์เสร็จ
-    os.remove(model_zip_path)
-    print("🗑 ลบไฟล์ ZIP สำเร็จ")
-
-# ✅ ดาวน์โหลดและแตกไฟล์โมเดลก่อนเริ่มแอป
+# ✅ โหลดโมเดล (ลดขนาดเป็น FP16 และใช้ GPU ถ้ามี)
 download_and_extract_model()
+MODEL_PATH = "/tmp/esi_model"
 
-# ✅ ตั้งค่าการใช้ GPU หรือ CPU
 device = "cuda" if torch.cuda.is_available() else "cpu"
-
-# ✅ โหลดโมเดลจากโฟลเดอร์ที่ดาวน์โหลดมา
-MODEL_PATH = "./esi_model"
-
 tokenizer = AutoTokenizer.from_pretrained(MODEL_PATH)
 model = AutoModelForSequenceClassification.from_pretrained(
-    MODEL_PATH, 
+    MODEL_PATH,
     num_labels=5,
-    torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32  # ใช้ Half-Precision บน GPU
+    torch_dtype=torch.float16 if device == "cuda" else torch.float32  # ใช้ Half-Precision บน GPU
 ).to(device)
 
 # ✅ ฟังก์ชันเคลียร์ CUDA Memory
@@ -81,7 +87,7 @@ def classify_esi(text):
     
     predicted_esi = torch.argmax(outputs.logits, dim=1).item() + 1
 
-    # ✅ เคลียร์ CUDA Memory หลังคำนวณเสร็จ
+    # เคลียร์ CUDA Memory หลังคำนวณเสร็จ
     clear_cuda_memory()
 
     return predicted_esi
@@ -99,7 +105,7 @@ def webhook():
         print("❌ Missing X-Line-Signature")
         return "Missing Signature", 400
 
-    # ✅ ใช้ Thread เพื่อให้ Webhook ตอบกลับทันที
+    # ใช้ Thread เพื่อให้ Webhook ตอบกลับทันที
     def handle_message_async():
         try:
             handler.handle(body, signature)
@@ -116,7 +122,7 @@ def handle_message(event):
     text = event.message.text
     esi_level = classify_esi(text)  # ใช้ฟังก์ชันประเมินระดับ ESI
 
-    # ✅ แปลงระดับ ESI เป็นข้อความที่เข้าใจง่าย
+    # แปลงระดับ ESI เป็นข้อความที่เข้าใจง่าย
     if esi_level in [1, 2]:
         response_text = f"🚨 อาการของคุณจำเป็นต้องเข้ารับการรักษาที่ห้องฉุกเฉินทันที! (ESI {esi_level})"
     elif esi_level == 3:
@@ -131,6 +137,7 @@ def handle_message(event):
     thread = threading.Thread(target=reply)
     thread.start()
 
-# ✅ รันแอป
+# ✅ รันแอป (ใช้ Uvicorn Worker เพื่อลด RAM)
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=10000)
+    from uvicorn import run
+    run(app, host="0.0.0.0", port=10000, workers=1)
