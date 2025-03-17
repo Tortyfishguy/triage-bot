@@ -1,7 +1,8 @@
-Flask
-firebase-admin
-torch==2.0.1+cpu  -f https://download.pytorch.org/whl/cpu.html
-transformers
+flask
 requests
+firebase-admin
+torch
+transformers
 line-bot-sdk
 gunicorn
+unzip
