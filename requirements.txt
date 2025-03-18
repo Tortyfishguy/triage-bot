@@ -4,3 +4,4 @@ transformers
 line-bot-sdk
 requests
 gunicorn
+uvicorn
