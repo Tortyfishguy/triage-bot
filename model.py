@@ -1,6 +1,6 @@
 import os
 import torch
-from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
+from transformers import AutoTokenizer, AutoModelForCausalLM
 
 # 🔹 ตั้งค่าชื่อโมเดลและโฟลเดอร์เก็บโมเดล
 MODEL_NAME = "deepseek-ai/deepseek-llm-7b-chat"
@@ -10,21 +10,15 @@ MODEL_DIR = "./deepseek_model"
 if not os.path.exists(MODEL_DIR):
     os.makedirs(MODEL_DIR)
 
-# 🔹 โหลด Tokenizer และ Model พร้อมใช้ offload เพื่อลด RAM
+# 🔹 โหลด Tokenizer และ Model (ไม่ใช้ bitsandbytes)
 tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME, cache_dir=MODEL_DIR)
-
-# 🔹 ใช้ quantization 4-bit เพื่อลด RAM ที่ใช้
-quantization_config = BitsAndBytesConfig(
-    load_in_4bit=True,
-    bnb_4bit_compute_dtype=torch.float16
-)
 
 model = AutoModelForCausalLM.from_pretrained(
     MODEL_NAME,
-    torch_dtype=torch.float16,
+    torch_dtype=torch.float16,  # ใช้ float16 เพื่อลด RAM
     device_map="auto",
     offload_folder=MODEL_DIR,  # ใช้ offload เพื่อลดการใช้ RAM
-    quantization_config=quantization_config
+    offload_state_dict=True  # เปิดใช้งาน offload_state_dict เพื่อลด RAM
 )
 
 def classify_esi(symptoms):
