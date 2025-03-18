@@ -1,10 +1,8 @@
 flask
 torch
 transformers
-firebase-admin
+accelerate>=0.20.0
+bitsandbytes
 line-bot-sdk
 requests
 safetensors
-gunicorn
-uvicorn
-accelerate>=0.20.0
