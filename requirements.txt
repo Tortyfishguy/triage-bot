@@ -1,5 +1,6 @@
 flask
-transformers
 line-bot-sdk
+requests
 gunicorn
-uvicorn
+transformers
+huggingface_hub
