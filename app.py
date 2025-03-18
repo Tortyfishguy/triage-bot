@@ -3,7 +3,7 @@ import threading
 from flask import Flask, request
 from linebot import LineBotApi, WebhookHandler
 from linebot.models import MessageEvent, TextMessage, TextSendMessage
-from model import classify_esi  # นำเข้าฟังก์ชันวิเคราะห์อาการจาก model.py
+from model import classify_esi
 
 # ✅ โหลด Environment Variables
 LINE_ACCESS_TOKEN = os.getenv("LINE_ACCESS_TOKEN")
@@ -25,19 +25,18 @@ def webhook():
 # ✅ ฟังก์ชันตอบกลับ LINE
 @handler.add(MessageEvent, message=TextMessage)
 def handle_message(event):
-    text = event.message.text
-    esi_level = classify_esi(text)  # ใช้โมเดล MedGPT วิเคราะห์อาการและจัดระดับ ESI
+    user_text = event.message.text
+    esi_level, response_text = classify_esi(user_text)
 
-    # สร้างข้อความตอบกลับตามระดับ ESI
+    # ✅ กำหนดคำตอบตามระดับ ESI
     if esi_level in [1, 2]:
-        response_text = f"🚨 อาการของคุณจำเป็นต้องเข้ารับการรักษาที่ห้องฉุกเฉินทันที! (ESI {esi_level})"
+        reply_text = f"🚨 {response_text} (ESI {esi_level})"
     elif esi_level == 3:
-        response_text = f"🩺 ควรได้รับการประเมินโดยแพทย์ (ESI {esi_level})"
+        reply_text = f"🩺 {response_text} (ESI {esi_level})"
     else:
-        response_text = f"💊 แนะนำให้เข้ารับการตรวจที่โรงพยาบาลในวันถัดไป (ESI {esi_level})"
+        reply_text = f"💊 {response_text} (ESI {esi_level})"
 
-    # ตอบกลับผู้ใช้ผ่าน LINE
-    threading.Thread(target=lambda: line_bot_api.reply_message(event.reply_token, TextSendMessage(text=response_text))).start()
+    threading.Thread(target=lambda: line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply_text))).start()
 
 # ✅ รันแอป
 if __name__ == "__main__":
