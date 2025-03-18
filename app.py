@@ -5,11 +5,11 @@ from linebot import LineBotApi, WebhookHandler
 from linebot.models import MessageEvent, TextMessage, TextSendMessage
 from model import classify_esi  # นำเข้าโมเดลจาก model.py
 
-# โหลด Environment Variables
+# 🔹 โหลด Environment Variables
 LINE_ACCESS_TOKEN = os.getenv("LINE_ACCESS_TOKEN")
 LINE_CHANNEL_SECRET = os.getenv("LINE_CHANNEL_SECRET")
 
-# ตั้งค่า Flask App
+# 🔹 ตั้งค่า Flask App
 app = Flask(__name__)
 line_bot_api = LineBotApi(LINE_ACCESS_TOKEN)
 handler = WebhookHandler(LINE_CHANNEL_SECRET)
@@ -45,7 +45,7 @@ def handle_message(event):
 
     threading.Thread(target=lambda: line_bot_api.reply_message(event.reply_token, TextSendMessage(text=response_text))).start()
 
-# รันแอป
+# 🔹 รันแอป
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=10000)
 
