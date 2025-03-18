@@ -4,6 +4,7 @@ transformers
 firebase-admin
 line-bot-sdk
 requests
+safetensors
 gunicorn
 uvicorn
 accelerate>=0.20.0
