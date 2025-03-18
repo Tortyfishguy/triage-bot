@@ -1,13 +1,21 @@
-import torch
-from transformers import AutoTokenizer, AutoModelForSequenceClassification
+from transformers import pipeline
 
-MODEL_NAME = "airesearch/wangchanberta-base-att-spm-uncased"
+# โหลดโมเดล Perceptor AI ที่สามารถทำ Text Generation
+MODEL_NAME = "Perceptor-AI/perceptor-medical-qa"
+qa_pipeline = pipeline("text-generation", model=MODEL_NAME)
 
-tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME, use_fast=False)
-model = AutoModelForSequenceClassification.from_pretrained(MODEL_NAME, num_labels=5)
-
+# ฟังก์ชันวิเคราะห์อาการทางการแพทย์ และจัดระดับ ESI (1-5)
 def classify_esi(text):
-    inputs = tokenizer(text, return_tensors="pt", truncation=True, padding=True, max_length=256)
-    with torch.no_grad():
-        outputs = model(**inputs)
-    return torch.argmax(outputs.logits, dim=1).item() + 1
+    prompt = (
+        f"ประเมินระดับความรุนแรงของอาการของผู้ป่วย: {text}\n"
+        "ให้จัดระดับ ESI (Emergency Severity Index) ตั้งแต่ 1-5 โดยมีความหมายดังนี้:\n"
+        "1 - อันตรายถึงชีวิต ต้องได้รับการรักษาทันที 🚨\n"
+        "2 - อาการรุนแรง ต้องพบแพทย์โดยเร็ว ⏳\n"
+        "3 - อาการปานกลาง รอการประเมินโดยแพทย์ได้ 🩺\n"
+        "4 - อาการไม่รุนแรง สามารถรอรับบริการ OPD ได้ 📅\n"
+        "5 - อาการเล็กน้อยมาก สามารถดูแลตนเองได้ที่บ้าน 🏡\n"
+        "ตอบกลับเป็นข้อความที่ระบุระดับ ESI และคำแนะนำ"
+    )
+
+    response = qa_pipeline(prompt)
+    return response[0]["generated_text"]
