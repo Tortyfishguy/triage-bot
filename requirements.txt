@@ -1,8 +1,5 @@
 flask
-torch
 transformers
-firebase-admin
 line-bot-sdk
-requests
 gunicorn
 uvicorn
