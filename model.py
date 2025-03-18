@@ -1,36 +1,26 @@
-import os
 from transformers import pipeline
 
-# โหลด Hugging Face API Token จาก Environment Variable
-HUGGINGFACE_TOKEN = os.getenv("HUGGINGFACE_TOKEN")
-
-# ตรวจสอบว่าได้ Token มาหรือไม่
-if not HUGGINGFACE_TOKEN:
-    raise ValueError("❌ Missing HUGGINGFACE_TOKEN. Please set it in the environment variables.")
-
-# ชื่อโมเดลของ Perceptor AI ที่ต้องการใช้
-MODEL_NAME = "Perceptor-AI/perceptor-medical-qa"
-
-# โหลดโมเดลผ่าน pipeline โดยเพิ่ม Token สำหรับ Authentication
-qa_pipeline = pipeline(
-    "text-generation",
-    model=MODEL_NAME,
-    token=HUGGINGFACE_TOKEN
-)
+# โหลดโมเดล MedGPT จาก Hugging Face
+MODEL_NAME = "ชื่อโมเดลของ MedGPT"  # แทนที่ด้วยชื่อโมเดลที่ถูกต้อง
+esi_pipeline = pipeline("text-generation", model=MODEL_NAME)
 
 def classify_esi(text):
     """
-    ใช้โมเดล Perceptor AI วิเคราะห์ข้อความสุขภาพ และแปลงผลลัพธ์เป็นระดับ ESI
+    ฟังก์ชันวิเคราะห์อาการที่พิมพ์มา และจัดระดับ ESI (Emergency Severity Index)
     """
-    response = qa_pipeline(text, max_length=100, truncation=True)
-    generated_text = response[0]["generated_text"]
+    prompt = f"Patient symptoms: {text}\nWhat is the ESI level (1-5)?"
+    response = esi_pipeline(prompt, max_length=200)
+    
+    # แปลงผลลัพธ์ให้เป็นระดับ ESI
+    esi_level = extract_esi_level(response[0]['generated_text'])
+    return esi_level
 
-    # แปลงผลลัพธ์เป็นระดับ ESI (กำหนดตาม heuristic)
-    if "emergency" in generated_text.lower():
-        return 1  # ESI 1 (วิกฤติ)
-    elif "urgent" in generated_text.lower():
-        return 2  # ESI 2 (เร่งด่วน)
-    elif "moderate" in generated_text.lower():
-        return 3  # ESI 3 (ทั่วไป)
-    else:
-        return 4  # ESI 4-5 (ไม่ฉุกเฉิน)
+def extract_esi_level(text):
+    """
+    ดึงค่า ESI level ออกจากข้อความที่โมเดลให้มา
+    """
+    for level in range(1, 6):
+        if f"ESI {level}" in text or f"ESI-{level}" in text:
+            return level
+    return 5  # ถ้าไม่พบให้ถือว่าเป็น ESI 5 (ไม่ร้ายแรง)
+
