@@ -1,7 +1,9 @@
 flask
 torch
 transformers
+firebase-admin
 line-bot-sdk
 requests
 gunicorn
 uvicorn
+accelerate>=0.20.0
