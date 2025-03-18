@@ -1,47 +1,31 @@
-import os
-from transformers import pipeline, AutoModelForCausalLM, AutoTokenizer
+import torch
+from transformers import AutoTokenizer, AutoModelForCausalLM
 
-# ✅ โหลด Environment Variables
-LLAMA_MODEL = os.getenv("LLAMA_MODEL", "meta-llama/Llama-2-7b-chat-hf")  # ใช้ Llama 2 (7B)
-MODEL_MAX_LENGTH = int(os.getenv("MODEL_MAX_LENGTH", 1024))
+# โหลดโมเดล Mistral-7B-Instruct
+MODEL_NAME = "mistralai/Mistral-7B-Instruct-v0.1"
+tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
+model = AutoModelForCausalLM.from_pretrained(MODEL_NAME, torch_dtype=torch.float16, device_map="auto")
 
-# ✅ โหลดโมเดลและ Tokenizer
-print("📥 Loading Llama 2 model...")
-tokenizer = AutoTokenizer.from_pretrained(LLAMA_MODEL)
-model = AutoModelForCausalLM.from_pretrained(LLAMA_MODEL)
-
-# ✅ ใช้ Pipeline ของ Hugging Face สำหรับ Text Generation
-qa_pipeline = pipeline("text-generation", model=model, tokenizer=tokenizer)
-
-# ✅ ฟังก์ชันวิเคราะห์อาการและจัดอันดับ ESI
-def classify_esi(patient_symptoms):
+def classify_esi(patient_symptoms: str) -> str:
+    """
+    วิเคราะห์อาการของผู้ป่วยและจัดระดับ ESI (Emergency Severity Index)
+    """
     prompt = f"""
-    คุณเป็น AI ผู้เชี่ยวชาญด้านการแพทย์
-    ผู้ป่วยบอกว่าพวกเขามีอาการดังต่อไปนี้: "{patient_symptoms}"
+    คุณเป็นแพทย์ฉุกเฉินที่เชี่ยวชาญด้านการคัดกรองผู้ป่วยฉุกเฉินโดยใช้ Emergency Severity Index (ESI)
+    วิเคราะห์อาการต่อไปนี้และจัดระดับ ESI จาก 1 ถึง 5:
+    
+    อาการของผู้ป่วย: {patient_symptoms}
 
-    กรุณาประเมินระดับความเร่งด่วนตาม **ESI Level** และบอกว่าผู้ป่วยควรไปพบแพทย์ด่วนหรือไม่:
-    - **ESI 1-2:** อาการรุนแรงมาก ควรพบแพทย์ทันที
-    - **ESI 3:** ควรพบแพทย์เร็วที่สุด
-    - **ESI 4-5:** สามารถรอพบแพทย์ในวันถัดไป
+    คำตอบของคุณควรอยู่ในรูปแบบ:
+    - ESI Level: (ระดับที่ 1 ถึง 5)
+    - คำแนะนำ: (ควรพบแพทย์ทันทีหรือรอได้)
 
-    กรุณาตอบในรูปแบบนี้:
-    "ระดับ ESI: [1-5] | คำแนะนำ: [ควรพบแพทย์ทันที / สามารถรอวันถัดไปได้]"
+    คำตอบ:
     """
 
-    response = qa_pipeline(prompt, max_length=MODEL_MAX_LENGTH, do_sample=True, temperature=0.7)[0]['generated_text']
+    inputs = tokenizer(prompt, return_tensors="pt").to(model.device)
+    with torch.no_grad():
+        outputs = model.generate(**inputs, max_length=300)
     
-    # ✅ ดึงค่า ESI Level ออกจากผลลัพธ์
-    esi_level = 3  # ค่า Default ถ้าหาไม่เจอ
-    if "ESI 1" in response:
-        esi_level = 1
-    elif "ESI 2" in response:
-        esi_level = 2
-    elif "ESI 3" in response:
-        esi_level = 3
-    elif "ESI 4" in response:
-        esi_level = 4
-    elif "ESI 5" in response:
-        esi_level = 5
-
-    return esi_level, response
-
+    response = tokenizer.decode(outputs[0], skip_special_tokens=True)
+    return response
