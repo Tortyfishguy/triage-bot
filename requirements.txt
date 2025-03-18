@@ -4,3 +4,4 @@ requests
 gunicorn
 transformers
 huggingface_hub
+uvicorn
