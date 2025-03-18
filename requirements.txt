@@ -1,7 +1,6 @@
 flask
 torch
 transformers
-accelerate
-sentencepiece
 line-bot-sdk
+requests
 gunicorn
