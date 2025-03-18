@@ -2,7 +2,6 @@ flask
 torch
 transformers
 accelerate>=0.20.0
-bitsandbytes
 line-bot-sdk
 requests
 safetensors
